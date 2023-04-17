@@ -84,49 +84,40 @@ class SupabaseAuth with WidgetsBindingObserver {
         return null;
       });
 
-      _instance._authSubscription =
-          Supabase.instance.client.auth.onAuthStateChange.listen(
+      _instance._authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
         (data) {
           _instance._onAuthStateChange(data.event, data.session);
         },
       )..onError((error, stackTrace) {
-              Supabase.instance.log(error.toString(), stackTrace);
-            });
+          Supabase.instance.log(error.toString(), stackTrace);
+        });
 
       await _instance._localStorage.initialize();
 
-      final hasPersistedSession =
-          await _instance._localStorage.hasAccessToken();
+      final hasPersistedSession = await _instance._localStorage.hasAccessToken();
       if (hasPersistedSession) {
         final persistedSession = await _instance._localStorage.accessToken();
         if (persistedSession != null) {
           try {
-            final response = await Supabase.instance.client.auth
-                .recoverSession(persistedSession);
+            final response = await Supabase.instance.client.auth.recoverSession(persistedSession);
             if (!_instance._initialSessionCompleter.isCompleted) {
               _instance._initialSessionCompleter.complete(response.session);
             }
           } on AuthException catch (error, stackTrace) {
             Supabase.instance.log(error.message, stackTrace);
             if (!_instance._initialSessionCompleter.isCompleted) {
-              _instance._initialSessionCompleter
-                  .completeError(error, stackTrace);
+              _instance._initialSessionCompleter.completeError(error, stackTrace);
             }
           } catch (error, stackTrace) {
             Supabase.instance.log(error.toString(), stackTrace);
             if (!_instance._initialSessionCompleter.isCompleted) {
-              _instance._initialSessionCompleter
-                  .completeError(error, stackTrace);
+              _instance._initialSessionCompleter.completeError(error, stackTrace);
             }
           }
         }
       }
       _widgetsBindingInstance?.addObserver(_instance);
-      if (kIsWeb ||
-          Platform.isAndroid ||
-          Platform.isIOS ||
-          Platform.isMacOS ||
-          Platform.isWindows) {
+      if (kIsWeb || Platform.isAndroid || Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
         await _instance._startDeeplinkObserver();
       }
 
@@ -168,14 +159,12 @@ class SupabaseAuth with WidgetsBindingObserver {
   /// Recover/refresh session if it's available
   /// e.g. called on a splash screen when the app starts.
   Future<bool> _recoverSupabaseSession() async {
-    final bool exist =
-        await SupabaseAuth.instance.localStorage.hasAccessToken();
+    final bool exist = await SupabaseAuth.instance.localStorage.hasAccessToken();
     if (!exist) {
       return false;
     }
 
-    final String? jsonStr =
-        await SupabaseAuth.instance.localStorage.accessToken();
+    final String? jsonStr = await SupabaseAuth.instance.localStorage.accessToken();
     if (jsonStr == null) {
       return false;
     }
@@ -293,8 +282,7 @@ class SupabaseAuth with WidgetsBindingObserver {
 
   /// Callback when deeplink receiving throw error
   void _onErrorReceivingDeeplink(String message, StackTrace stackTrace) {
-    Supabase.instance
-        .log('onErrorReceivingDeepLink message: $message', stackTrace);
+    Supabase.instance.log('onErrorReceivingDeepLink message: $message', stackTrace);
   }
 }
 
@@ -341,8 +329,7 @@ extension GoTrueClientSignInProvider on GoTrueClient {
         Platform.isIOS;
 
     if (willOpenWebview) {
-      Navigator.of(context).push(PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) {
+      Navigator.of(context).push(PageRouteBuilder(pageBuilder: (context, animation, secondaryAnimation) {
         return _OAuthSignInWebView(oAuthUri: uri, redirectTo: redirectTo);
       }));
       return true;
@@ -364,8 +351,7 @@ extension GoTrueClientSignInProvider on GoTrueClient {
   /// This method is experimental as the underlying `signInWithIdToken` method is experimental.
   @experimental
   Future<AuthResponse> signInWithApple() async {
-    assert(!kIsWeb && (Platform.isIOS || Platform.isMacOS),
-        'Please use signInWithOAuth for non-iOS platforms');
+    assert(!kIsWeb && (Platform.isIOS || Platform.isMacOS), 'Please use signInWithOAuth for non-iOS platforms');
     final rawNonce = _generateRandomString();
     final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
 
@@ -414,6 +400,7 @@ class _OAuthSignInWebViewState extends State<_OAuthSignInWebView> {
   bool isLoading = true;
 
   late final WebViewController _controller;
+  final webViewCookieManager = WebViewCookieManager();
 
   void _handleWebResourceError(WebResourceError error) {
     if (Navigator.canPop(context)) {
@@ -424,8 +411,7 @@ class _OAuthSignInWebViewState extends State<_OAuthSignInWebView> {
   FutureOr<NavigationDecision> _handleNavigationRequest(
     NavigationRequest request,
   ) {
-    if (widget.redirectTo != null &&
-        request.url.startsWith(widget.redirectTo!)) {
+    if (widget.redirectTo != null && request.url.startsWith(widget.redirectTo!)) {
       launchUrlString(request.url);
       if (Navigator.canPop(context)) {
         Navigator.of(context).pop(true);
@@ -437,18 +423,22 @@ class _OAuthSignInWebViewState extends State<_OAuthSignInWebView> {
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..clearCache()
-      ..clearLocalStorage()
-      ..setUserAgent('Supabase OAuth')
-      ..loadRequest(widget.oAuthUri)
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) => setState(() => isLoading = true),
-        onPageFinished: (_) => setState(() => isLoading = false),
-        onWebResourceError: _handleWebResourceError,
-        onNavigationRequest: _handleNavigationRequest,
-      ));
+
+    Future.microtask(() async {
+      await webViewCookieManager.clearCookies();
+      _controller = WebViewController()
+        ..clearCache()
+        ..clearLocalStorage()
+        ..setUserAgent('Supabase OAuth')
+        ..loadRequest(widget.oAuthUri)
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(NavigationDelegate(
+          onPageStarted: (_) => setState(() => isLoading = true),
+          onPageFinished: (_) => setState(() => isLoading = false),
+          onWebResourceError: _handleWebResourceError,
+          onNavigationRequest: _handleNavigationRequest,
+        ));
+    });
   }
 
   @override
