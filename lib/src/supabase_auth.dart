@@ -438,6 +438,8 @@ class _OAuthSignInWebViewState extends State<_OAuthSignInWebView> {
   void initState() {
     super.initState();
     _controller = WebViewController()
+      ..clearCache()
+      ..clearLocalStorage()
       ..setUserAgent('Supabase OAuth')
       ..loadRequest(widget.oAuthUri)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
