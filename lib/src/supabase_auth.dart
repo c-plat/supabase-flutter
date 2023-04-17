@@ -424,21 +424,20 @@ class _OAuthSignInWebViewState extends State<_OAuthSignInWebView> {
   void initState() {
     super.initState();
 
-    Future.microtask(() async {
-      await webViewCookieManager.clearCookies();
-      _controller = WebViewController()
-        ..clearCache()
-        ..clearLocalStorage()
-        ..setUserAgent('Supabase OAuth')
-        ..loadRequest(widget.oAuthUri)
-        ..setJavaScriptMode(JavaScriptMode.unrestricted)
-        ..setNavigationDelegate(NavigationDelegate(
-          onPageStarted: (_) => setState(() => isLoading = true),
-          onPageFinished: (_) => setState(() => isLoading = false),
-          onWebResourceError: _handleWebResourceError,
-          onNavigationRequest: _handleNavigationRequest,
-        ));
-    });
+    _controller = WebViewController()
+      ..clearCache()
+      ..clearLocalStorage()
+      ..setUserAgent('Supabase OAuth')
+      ..loadRequest(widget.oAuthUri)
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (_) => setState(() => isLoading = true),
+        onPageFinished: (_) => setState(() => isLoading = false),
+        onWebResourceError: _handleWebResourceError,
+        onNavigationRequest: _handleNavigationRequest,
+      ));
+
+    Future.microtask(() async => await webViewCookieManager.clearCookies());
   }
 
   @override
