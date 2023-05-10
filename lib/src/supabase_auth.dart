@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_appauth/flutter_appauth.dart' as fah;
 import 'package:meta/meta.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -370,6 +371,65 @@ extension GoTrueClientSignInProvider on GoTrueClient {
 
     return signInWithIdToken(
       provider: Provider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
+  }
+
+  Future<AuthResponse> signInWithGoogle(String bundleId, String clientId, String serverClientId) async {
+    final rawNonce = _generateRandomString();
+    final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+    /// fixed for google login
+    final redirectUrl = '$bundleId:/google_auth';
+
+    /// fixed for google login
+    const discoveryUrl = 'https://accounts.google.com/.well-known/openid-configuration';
+
+    final appAuth = fah.FlutterAppAuth();
+
+    // authorize the user by opening the concent page
+    final result = await appAuth.authorize(
+      fah.AuthorizationRequest(clientId, redirectUrl, discoveryUrl: discoveryUrl, nonce: hashedNonce, scopes: [
+        'openid',
+        'email',
+      ], additionalParameters: {
+        'audience': serverClientId,
+        'server_client_id': serverClientId,
+      }),
+    );
+
+    if (result == null) {
+      throw AuthException('Authorization failed, result is null.');
+    }
+
+    // Request the access and id token to google
+    final tokenResult = await appAuth.token(
+      fah.TokenRequest(
+        clientId,
+        redirectUrl,
+        authorizationCode: result.authorizationCode,
+        discoveryUrl: discoveryUrl,
+        codeVerifier: result.codeVerifier,
+        nonce: result.nonce,
+        scopes: [
+          'openid',
+          'email',
+        ],
+        additionalParameters: {
+          'audience': serverClientId,
+          'server_client_id': serverClientId,
+        },
+      ),
+    );
+
+    final idToken = tokenResult?.idToken;
+    if (idToken == null) {
+      throw AuthException('Could not find ID Token from generated credential.');
+    }
+
+    return signInWithIdToken(
+      provider: Provider.google,
       idToken: idToken,
       nonce: rawNonce,
     );
