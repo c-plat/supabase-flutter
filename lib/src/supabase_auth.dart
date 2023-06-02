@@ -8,6 +8,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_appauth/flutter_appauth.dart' as fah;
 import 'package:meta/meta.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -84,49 +85,40 @@ class SupabaseAuth with WidgetsBindingObserver {
         return null;
       });
 
-      _instance._authSubscription =
-          Supabase.instance.client.auth.onAuthStateChange.listen(
+      _instance._authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
         (data) {
           _instance._onAuthStateChange(data.event, data.session);
         },
       )..onError((error, stackTrace) {
-              Supabase.instance.log(error.toString(), stackTrace);
-            });
+          Supabase.instance.log(error.toString(), stackTrace);
+        });
 
       await _instance._localStorage.initialize();
 
-      final hasPersistedSession =
-          await _instance._localStorage.hasAccessToken();
+      final hasPersistedSession = await _instance._localStorage.hasAccessToken();
       if (hasPersistedSession) {
         final persistedSession = await _instance._localStorage.accessToken();
         if (persistedSession != null) {
           try {
-            final response = await Supabase.instance.client.auth
-                .recoverSession(persistedSession);
+            final response = await Supabase.instance.client.auth.recoverSession(persistedSession);
             if (!_instance._initialSessionCompleter.isCompleted) {
               _instance._initialSessionCompleter.complete(response.session);
             }
           } on AuthException catch (error, stackTrace) {
             Supabase.instance.log(error.message, stackTrace);
             if (!_instance._initialSessionCompleter.isCompleted) {
-              _instance._initialSessionCompleter
-                  .completeError(error, stackTrace);
+              _instance._initialSessionCompleter.completeError(error, stackTrace);
             }
           } catch (error, stackTrace) {
             Supabase.instance.log(error.toString(), stackTrace);
             if (!_instance._initialSessionCompleter.isCompleted) {
-              _instance._initialSessionCompleter
-                  .completeError(error, stackTrace);
+              _instance._initialSessionCompleter.completeError(error, stackTrace);
             }
           }
         }
       }
       _widgetsBindingInstance?.addObserver(_instance);
-      if (kIsWeb ||
-          Platform.isAndroid ||
-          Platform.isIOS ||
-          Platform.isMacOS ||
-          Platform.isWindows) {
+      if (kIsWeb || Platform.isAndroid || Platform.isIOS || Platform.isMacOS || Platform.isWindows) {
         await _instance._startDeeplinkObserver();
       }
 
@@ -168,14 +160,12 @@ class SupabaseAuth with WidgetsBindingObserver {
   /// Recover/refresh session if it's available
   /// e.g. called on a splash screen when the app starts.
   Future<bool> _recoverSupabaseSession() async {
-    final bool exist =
-        await SupabaseAuth.instance.localStorage.hasAccessToken();
+    final bool exist = await SupabaseAuth.instance.localStorage.hasAccessToken();
     if (!exist) {
       return false;
     }
 
-    final String? jsonStr =
-        await SupabaseAuth.instance.localStorage.accessToken();
+    final String? jsonStr = await SupabaseAuth.instance.localStorage.accessToken();
     if (jsonStr == null) {
       return false;
     }
@@ -293,8 +283,7 @@ class SupabaseAuth with WidgetsBindingObserver {
 
   /// Callback when deeplink receiving throw error
   void _onErrorReceivingDeeplink(String message, StackTrace stackTrace) {
-    Supabase.instance
-        .log('onErrorReceivingDeepLink message: $message', stackTrace);
+    Supabase.instance.log('onErrorReceivingDeepLink message: $message', stackTrace);
   }
 }
 
@@ -337,15 +326,14 @@ extension GoTrueClientSignInProvider on GoTrueClient {
     );
     final uri = Uri.parse(res.url!);
 
-    final willOpenWebview = (authScreenLaunchMode == LaunchMode.inAppWebView ||
-            authScreenLaunchMode == LaunchMode.platformDefault) &&
-        context != null &&
-        !kIsWeb && // `Platform.isIOS` throws on web, so adding a guard for web here.
-        Platform.isIOS;
+    final willOpenWebview =
+        (authScreenLaunchMode == LaunchMode.inAppWebView || authScreenLaunchMode == LaunchMode.platformDefault) &&
+            context != null &&
+            !kIsWeb && // `Platform.isIOS` throws on web, so adding a guard for web here.
+            Platform.isIOS;
 
     if (willOpenWebview) {
-      Navigator.of(context).push(PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) {
+      Navigator.of(context).push(PageRouteBuilder(pageBuilder: (context, animation, secondaryAnimation) {
         return _OAuthSignInWebView(oAuthUri: uri, redirectTo: redirectTo);
       }));
       return true;
@@ -376,8 +364,7 @@ extension GoTrueClientSignInProvider on GoTrueClient {
   /// This method is experimental as the underlying `signInWithIdToken` method is experimental.
   @experimental
   Future<AuthResponse> signInWithApple() async {
-    assert(!kIsWeb && (Platform.isIOS || Platform.isMacOS),
-        'Please use signInWithOAuth for non-iOS platforms');
+    assert(!kIsWeb && (Platform.isIOS || Platform.isMacOS), 'Please use signInWithOAuth for non-iOS platforms');
     final rawNonce = _generateRandomString();
     final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
 
@@ -396,6 +383,65 @@ extension GoTrueClientSignInProvider on GoTrueClient {
 
     return signInWithIdToken(
       provider: Provider.apple,
+      idToken: idToken,
+      nonce: rawNonce,
+    );
+  }
+
+  Future<AuthResponse> signInWithGoogle(String bundleId, String clientId, String serverClientId) async {
+    final rawNonce = _generateRandomString();
+    final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+    /// fixed for google login
+    final redirectUrl = '$bundleId:/google_auth';
+
+    /// fixed for google login
+    const discoveryUrl = 'https://accounts.google.com/.well-known/openid-configuration';
+
+    final appAuth = fah.FlutterAppAuth();
+
+    // authorize the user by opening the concent page
+    final result = await appAuth.authorize(
+      fah.AuthorizationRequest(clientId, redirectUrl, discoveryUrl: discoveryUrl, nonce: hashedNonce, scopes: [
+        'openid',
+        'email',
+      ], additionalParameters: {
+        'audience': serverClientId,
+        'server_client_id': serverClientId,
+      }),
+    );
+
+    if (result == null) {
+      throw AuthException('Authorization failed, result is null.');
+    }
+
+    // Request the access and id token to google
+    final tokenResult = await appAuth.token(
+      fah.TokenRequest(
+        clientId,
+        redirectUrl,
+        authorizationCode: result.authorizationCode,
+        discoveryUrl: discoveryUrl,
+        codeVerifier: result.codeVerifier,
+        nonce: result.nonce,
+        scopes: [
+          'openid',
+          'email',
+        ],
+        additionalParameters: {
+          'audience': serverClientId,
+          'server_client_id': serverClientId,
+        },
+      ),
+    );
+
+    final idToken = tokenResult?.idToken;
+    if (idToken == null) {
+      throw AuthException('Could not find ID Token from generated credential.');
+    }
+
+    return signInWithIdToken(
+      provider: Provider.google,
       idToken: idToken,
       nonce: rawNonce,
     );
@@ -436,8 +482,7 @@ class _OAuthSignInWebViewState extends State<_OAuthSignInWebView> {
   FutureOr<NavigationDecision> _handleNavigationRequest(
     NavigationRequest request,
   ) async {
-    if (widget.redirectTo != null &&
-        request.url.startsWith(widget.redirectTo!)) {
+    if (widget.redirectTo != null && request.url.startsWith(widget.redirectTo!)) {
       await launchUrlString(request.url);
     }
     return NavigationDecision.navigate;
